@@ -17,11 +17,14 @@ module ID(
 
     output wire [`BR_WD-1:0] br_bus, 
     
-    input wire [37:0] ex_to_id_bus,   //ex返回id
+    input wire [`EX_TO_ID_FW-1:0] ex_to_id_bus,   //ex返回id
 
-    input wire [37:0] mem_to_id_bus,  //mem返回id
+    input wire [`MEM_TO_ID_FW-1:0] mem_to_id_bus,  //mem返回id
 
-    input wire [37:0] wb_to_id_bus     //wb返回id
+    input wire [`WB_TO_ID_FW-1:0] wb_to_id_bus,     //wb返回id
+
+    output wire stallreq_from_id,
+    input wire ex_is_load
 );
 
     reg [`IF_TO_ID_WD-1:0] if_to_id_bus_r;
@@ -110,7 +113,7 @@ module ID(
     assign offset = inst[15:0];
     assign sel = inst[2:0];
 
-    wire inst_ori, inst_lui, inst_addiu, inst_beq;
+    wire inst_ori, inst_lui, inst_addiu, inst_beq, inst_subu, inst_jal;
 
     wire op_add, op_sub, op_slt, op_sltu;
     wire op_and, op_nor, op_or, op_xor;
@@ -141,35 +144,38 @@ module ID(
     assign inst_lui     = op_d[6'b00_1111];
     assign inst_addiu   = op_d[6'b00_1001];
     assign inst_beq     = op_d[6'b00_0100];
+    assign inst_subu    = op_d[6'b00_0000] && func_d[6'b10_0011];   //减法，rs-re->rd
+    assign inst_jal     = op_d[6'b00_0011];                         //无条件跳转，jal rd,imm，GPR[31] ← PC + 8,PC ← PC + 4[31:28] || imm || '00'
+
 
 
 
     // rs to reg1
-    assign sel_alu_src1[0] = inst_ori | inst_addiu;
+    assign sel_alu_src1[0] = inst_ori | inst_addiu |inst_subu;
 
     // pc to reg1
-    assign sel_alu_src1[1] = 1'b0;
+    assign sel_alu_src1[1] = inst_jal;
 
     // sa_zero_extend to reg1
     assign sel_alu_src1[2] = 1'b0;
 
     
     // rt to reg2
-    assign sel_alu_src2[0] = 1'b0;
+    assign sel_alu_src2[0] = inst_subu;
     
     // imm_sign_extend to reg2
     assign sel_alu_src2[1] = inst_lui | inst_addiu;
 
     // 32'b8 to reg2
-    assign sel_alu_src2[2] = 1'b0;
+    assign sel_alu_src2[2] = inst_jal;
 
     // imm_zero_extend to reg2
     assign sel_alu_src2[3] = inst_ori;
 
 
 
-    assign op_add = inst_addiu;
-    assign op_sub = 1'b0;
+    assign op_add = inst_addiu | inst_jal;
+    assign op_sub = inst_subu;
     assign op_slt = 1'b0;
     assign op_sltu = 1'b0;
     assign op_and = 1'b0;
@@ -196,16 +202,16 @@ module ID(
 
 
     // regfile store enable
-    assign rf_we = inst_ori | inst_lui | inst_addiu;
+    assign rf_we = inst_ori | inst_lui | inst_addiu | inst_subu | inst_jal;
 
 
 
     // store in [rd]
-    assign sel_rf_dst[0] = 1'b0;
+    assign sel_rf_dst[0] = inst_subu;
     // store in [rt] 
     assign sel_rf_dst[1] = inst_ori | inst_lui | inst_addiu;
     // store in [31]
-    assign sel_rf_dst[2] = 1'b0;
+    assign sel_rf_dst[2] = inst_jal;
 
     // sel for regfile address
     assign rf_waddr = {5{sel_rf_dst[0]}} & rd 
@@ -263,6 +269,7 @@ module ID(
                             :(wb_rf_we & (wb_rf_waddr == rt)) ? wb_rf_wdata
                             :rdata2;
 
+    assign stallreq_from_id = (ex_is_load  & forwarding_ex_rf_waddr == rs) | (ex_is_load & forwarding_ex_rf_waddr == rt) ;
 
     assign id_to_ex_bus = {
         id_pc,          // 158:127
@@ -292,9 +299,9 @@ module ID(
 
     assign rs_eq_rt = (new_rdata1 == new_rdata2);
 
-    assign br_e = inst_beq & rs_eq_rt;
-    assign br_addr = inst_beq ? (pc_plus_4 + {{14{inst[15]}},inst[15:0],2'b0}) : 32'b0;
-
+    assign br_e = inst_beq & rs_eq_rt & inst_jal;
+    assign br_addr = inst_beq ? (pc_plus_4 + {{14{inst[15]}},inst[15:0],2'b0}) 
+                    : inst_jal ? ({pc_plus_4[31:28],inst[25:0],2'b0}) : 32'b0;
     assign br_bus = {
         br_e,
         br_addr
