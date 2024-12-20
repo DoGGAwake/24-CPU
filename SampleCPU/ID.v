@@ -15,7 +15,13 @@ module ID(
 
     output wire [`ID_TO_EX_WD-1:0] id_to_ex_bus,
 
-    output wire [`BR_WD-1:0] br_bus 
+    output wire [`BR_WD-1:0] br_bus, 
+    
+    input wire [37:0] ex_to_id_bus,   //ex返回id
+
+    input wire [37:0] mem_to_id_bus,  //mem返回id
+
+    input wire [37:0] wb_to_id_bus     //wb返回id
 );
 
     reg [`IF_TO_ID_WD-1:0] if_to_id_bus_r;
@@ -209,6 +215,55 @@ module ID(
     // 0 from alu_res ; 1 from ld_res
     assign sel_rf_res = 1'b0; 
 
+
+    //1219 update
+    //ex forwarding,ex返回id段，ex line96
+    wire forwarding_ex_rf_we;             
+    wire [4:0] forwarding_ex_rf_waddr;    
+    wire [31:0] forwarding_ex_result;     
+
+    //mem forwarding，mem返回id段，mem line80
+    wire forwarding_mem_rf_we;            
+    wire [4:0] forwarding_mem_rf_waddr;   
+    wire [31:0] forwarding_mem_rf_wdata;  
+
+    //wb forwarding，mem返回id段，mem line80
+    wire forwarding_wb_rf_we;            
+    wire [4:0] forwarding_wb_rf_waddr;   
+    wire [31:0] forwarding_wb_rf_wdata;  
+
+    wire [31:0] new_rdata1, new_rdata2;
+
+    assign {
+        forwarding_ex_rf_we,          // 37
+        forwarding_ex_rf_waddr,       // 36:32
+        forwarding_ex_result       // 31:0
+    } = ex_to_id_bus;
+
+    assign {
+        forwarding_mem_rf_we,     //37
+        forwarding_mem_rf_waddr,  //36:32
+        forwarding_mem_rf_wdata   //31:0
+    } = mem_to_id_bus;
+
+    assign {
+        forwarding_wb_rf_we,     //37
+        forwarding_wb_rf_waddr,  //36:32
+        forwarding_wb_rf_wdata   //31:0
+    } = wb_to_id_bus;
+
+
+    assign new_rdata1 = (forwarding_ex_rf_we & (forwarding_ex_rf_waddr == rs)) ? forwarding_ex_result
+                            :(forwarding_mem_rf_we & (forwarding_mem_rf_waddr == rs)) ? forwarding_mem_rf_wdata
+                            :(wb_rf_we & (wb_rf_waddr == rs)) ? wb_rf_wdata
+                            :rdata1;
+
+    assign new_rdata2 = (forwarding_ex_rf_we & (forwarding_ex_rf_waddr == rt)) ? forwarding_ex_result
+                            :(forwarding_mem_rf_we & (forwarding_mem_rf_waddr == rt)) ? forwarding_mem_rf_wdata
+                            :(wb_rf_we & (wb_rf_waddr == rt)) ? wb_rf_wdata
+                            :rdata2;
+
+
     assign id_to_ex_bus = {
         id_pc,          // 158:127
         inst,           // 126:95
@@ -220,8 +275,8 @@ module ID(
         rf_we,          // 70
         rf_waddr,       // 69:65
         sel_rf_res,     // 64
-        rdata1,         // 63:32
-        rdata2          // 31:0
+        new_rdata1,         // 63:32
+        new_rdata2          // 31:0
     };
 
 
@@ -235,7 +290,7 @@ module ID(
     wire [31:0] pc_plus_4;
     assign pc_plus_4 = id_pc + 32'h4;
 
-    assign rs_eq_rt = (rdata1 == rdata2);
+    assign rs_eq_rt = (new_rdata1 == new_rdata2);
 
     assign br_e = inst_beq & rs_eq_rt;
     assign br_addr = inst_beq ? (pc_plus_4 + {{14{inst[15]}},inst[15:0],2'b0}) : 32'b0;

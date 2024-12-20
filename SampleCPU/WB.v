@@ -12,7 +12,9 @@ module WB(
     output wire [31:0] debug_wb_pc,
     output wire [3:0] debug_wb_rf_wen,
     output wire [4:0] debug_wb_rf_wnum,
-    output wire [31:0] debug_wb_rf_wdata 
+    output wire [31:0] debug_wb_rf_wdata,
+    
+    output wire [37:0] wb_to_id_bus //返回id
 );
 
     reg [`MEM_TO_WB_WD-1:0] mem_to_wb_bus_r;
@@ -50,10 +52,18 @@ module WB(
         rf_wdata
     };
 
+    assign wb_to_id_bus = {
+        rf_we,
+        rf_waddr,
+        rf_wdata
+    };
+
     assign debug_wb_pc = wb_pc;
     assign debug_wb_rf_wen = {4{rf_we}};
     assign debug_wb_rf_wnum = rf_waddr;
     assign debug_wb_rf_wdata = rf_wdata;
+
+    //第一个错误，0xbfaf ori 0xf008结果应为0xffaf
 
     
 endmodule
