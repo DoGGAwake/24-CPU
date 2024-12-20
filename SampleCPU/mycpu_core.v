@@ -19,7 +19,13 @@ module mycpu_core(
     output wire [31:0] debug_wb_pc,
     output wire [3:0] debug_wb_rf_wen,
     output wire [4:0] debug_wb_rf_wnum,
-    output wire [31:0] debug_wb_rf_wdata
+    output wire [31:0] debug_wb_rf_wdata,
+
+    //debug
+    output wire [31:0] debug_rdata1,
+    output wire [31:0] debug_rdata2,
+    output wire [31:0] debug_new_rdata1,
+    output wire [31:0] debug_new_rdata2
 );
     wire [`IF_TO_ID_WD-1:0] if_to_id_bus;
     wire [`ID_TO_EX_WD-1:0] id_to_ex_bus;
@@ -31,9 +37,9 @@ module mycpu_core(
     wire [`StallBus-1:0] stall;
 
     //到ID的连线
-    wire [37:0] ex_to_id_bus;
-    wire [37:0] mem_to_id_bus;
-    wire [37:0] wb_to_id_bus;
+    wire [`EX_TO_ID_FW-1:0] ex_to_id_bus;
+    wire [`MEM_TO_ID_FW-1:0] mem_to_id_bus;
+    wire [`WB_TO_ID_FW-1:0] wb_to_id_bus;
 
 
     IF u_IF(
@@ -50,18 +56,24 @@ module mycpu_core(
     
 
     ID u_ID(
-    	.clk             (clk             ),
-        .rst             (rst             ),
-        .stall           (stall           ),
-        .stallreq        (stallreq        ),
-        .if_to_id_bus    (if_to_id_bus    ),
-        .inst_sram_rdata (inst_sram_rdata ),
-        .wb_to_rf_bus    (wb_to_rf_bus    ),
-        .id_to_ex_bus    (id_to_ex_bus    ),
-        .br_bus          (br_bus          ),
-        .ex_to_id_bus    (ex_to_id_bus    ),
-        .mem_to_id_bus   (mem_to_id_bus   ),
-        .wb_to_id_bus    (wb_to_id_bus    )
+    	.clk               (clk             ),
+        .rst               (rst             ),
+        .stall             (stall           ),
+        .stallreq          (stallreq        ),
+        .if_to_id_bus      (if_to_id_bus    ),
+        .inst_sram_rdata   (inst_sram_rdata ),
+        .wb_to_rf_bus      (wb_to_rf_bus    ),
+        .id_to_ex_bus      (id_to_ex_bus    ),
+        .br_bus            (br_bus          ),
+        .ex_to_id_bus      (ex_to_id_bus    ),
+        .mem_to_id_bus     (mem_to_id_bus   ),
+        .wb_to_id_bus      (wb_to_id_bus    ),
+        .ex_is_load        (ex_is_load      ),
+        .stallreq_from_id  (stallreq_from_id),
+        .debug_rdata1      (debug_rdata1),
+        .debug_rdata2      (debug_rdata2),
+        .debug_new_rdata1  (debug_new_rdata1),
+        .debug_new_rdata2  (debug_new_rdata2)
     );
 
     EX u_EX(
@@ -74,7 +86,9 @@ module mycpu_core(
         .data_sram_wen   (data_sram_wen   ),
         .data_sram_addr  (data_sram_addr  ),
         .data_sram_wdata (data_sram_wdata ),
-        .ex_to_id_bus    (ex_to_id_bus    )
+        .ex_to_id_bus    (ex_to_id_bus    ),
+        .ex_is_load      (ex_is_load      ),    
+        .stallreq_from_ex  (stallreq_from_ex)
     );
 
     MEM u_MEM(
@@ -102,6 +116,8 @@ module mycpu_core(
 
     CTRL u_CTRL(
     	.rst   (rst   ),
+        .stallreq_from_id  (stallreq_from_id),
+        .stallreq_from_ex  (stallreq_from_ex),
         .stall (stall )
     );
     
