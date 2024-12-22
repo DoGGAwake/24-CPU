@@ -36,6 +36,10 @@ module mycpu_core(
     wire [`WB_TO_RF_WD-1:0] wb_to_rf_bus;
     wire [`StallBus-1:0] stall;
 
+    wire stallreq_from_id;
+    wire stallreq_from_ex;
+    wire ex_is_load;
+
     //到ID的连线
     wire [`EX_TO_ID_FW-1:0] ex_to_id_bus;
     wire [`MEM_TO_ID_FW-1:0] mem_to_id_bus;
