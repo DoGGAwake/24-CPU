@@ -36,6 +36,7 @@ module mycpu_core(
     wire [`WB_TO_RF_WD-1:0] wb_to_rf_bus;
     wire [`StallBus-1:0] stall;
 
+    //stall 相关
     wire stallreq_from_id;
     wire stallreq_from_ex;
     wire ex_is_load;
