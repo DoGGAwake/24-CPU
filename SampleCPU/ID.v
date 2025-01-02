@@ -162,12 +162,28 @@ module ID(
     wire inst_addiu;
     wire inst_addu;
     wire inst_subu;
+    wire inst_addi;
+    wire inst_add;
+    wire inst_sub;
+    wire inst_slt;
+    wire inst_slti;
+    wire inst_sltu;
+    wire inst_sltiu;
 
     //移位指令
     wire inst_sll;
 
     //访存
     wire inst_lw;
+    wire inst_sw;
+
+    wire inst_lb;
+    wire inst_lbu;
+    wire inst_lh;
+    wire inst_lhu;
+    wire inst_sb;
+    wire inst_sh;
+ 
 
 
     wire op_add, op_sub, op_slt, op_sltu;
@@ -210,10 +226,30 @@ module ID(
     assign inst_or      = op_d[6'b00_0000] && func_d[6'b10_0101];   //寄存器 rs 中的值与寄存器 rt 中的值按位逻辑或，结果写入寄存器 rd 中。GPR[rd] ← GPR[rs] or GPR[rt]
     assign inst_lw      = op_d[6'b10_0011];                         //base 寄存器的值加上符号扩展后的立即数 offset 得到访存的虚地址，如果地址不是 4 的整数倍则触发地址错例外，否则据此虚地址从存储器中读取连续 4 个字节的值，写入到 rt 寄存器中。
     assign inst_xor     = op_d[6'b00_0000] && func_d[6'b10_0110];   //寄存器 rs 中的值与寄存器 rt 中的值按位逻辑异或，结果写入寄存器 rd 中。              
+    //1.2 updata
+    assign inst_sw      = op_d[6'b10_1011]; 
+    assign inst_addi    = op_d[6'b00_1000];                         //将寄存器 rs 的值与有符号扩展至 32 位的立即数 imm 相加，结果写入 rt 寄存器中。如果产生溢出，则触发整型溢出例外（IntegerOverflow）。
+    assign inst_add     = op_d[6'b00_0000] && func_d[6'b10_0000];   //将寄存器 rs 的值与寄存器 rt 的值相加，结果写入寄存器 rd 中。如果产生溢出，则触发整型溢出例外（IntegerOverflow）。
+    assign inst_sub     = op_d[6'b00_0000] && func_d[6'b10_0010];   //将寄存器 rs 的值与寄存器 rt 的值相减，结果写入 rd 寄存器中。如果产生溢出，则触发整型溢出例外（IntegerOverflow）。
+    assign inst_slt     = op_d[6'b00_0000] && func_d[6'b10_1010];   //将寄存器 rs 的值与寄存器 rt 中的值进行有符号数比较，如果寄存器 rs 中的值小，则寄存器 rd 置 1；否则寄存器 rd 置 0。
+    assign inst_slti    = op_d[6'b10_1010];                         //将寄存器 rs 的值与有符号扩展至 32 位的立即数 imm 进行有符号数比较，如果寄存器 rs 中的值小，则寄存器 rt 置 1；否则寄存器 rt 置 0。
+    assign inst_sltu    = op_d[6'b00_0000] && func_d[6'b10_1011];   //将寄存器 rs 的值与寄存器 rt 中的值进行无符号数比较，如果寄存器 rs 中的值小，则寄存器 rd 置 1；否则寄存器 rd 置 0
+    assign inst_sltiu   = op_d[6'b00_1011];                         //将寄存器 rs 的值与有符号扩展 ．．．．．至 32 位的立即数 imm 进行无符号数比较，如果寄存器 rs 中的值小，则寄存器 rt 置 1；否则寄存器 rt 置 0。
+    assign inst_lb      = op_d[6'b10_0000];                         //将 base 寄存器的值加上符号扩展后的立即数 offset 得到访存的虚地址，据此虚地址从存储器中读取 1 个字节的值并进行符号扩展，写入到 rt 寄存器中。
+    assign inst_lbu     = op_d[6'b10_0100];                         //将 base 寄存器的值加上符号扩展后的立即数 offset 得到访存的虚地址，据此虚地址从存储器中读取 1 个字节的值并进行 0 扩展，写入到 rt 寄存器中。
+    assign inst_lh      = op_d[6'b10_0001];                         //将 base 寄存器的值加上符号扩展后的立即数 offset 得到访存的虚地址，如果地址不是 2 的整数倍则触发地址错例外，否则据此虚地址从存储器中读取连续 2 个字节的值并进行符号扩展，写入到rt 寄存器中。
+    assign inst_lhu     = op_d[6'b10_0101];                         //将 base 寄存器的值加上符号扩展后的立即数 offset 得到访存的虚地址，如果地址不是 2 的整数倍则触发地址错例外，否则据此虚地址从存储器中读取连续 2 个字节的值并进行 0 扩展，写入到 rt寄存器中。
+    assign inst_sb      = op_d[6'b10_1000];                         //将 base 寄存器的值加上符号扩展后的立即数 offset 得到访存的虚地址，据此虚地址将 rt 寄存器的最低字节存入存储器中。
+    assign inst_sh      = op_d[6'b10_1001];                         //将 base 寄存器的值加上符号扩展后的立即数 offset 得到访存的虚地址，如果地址不是 2 的整数倍则触发地址错例外，否则据此虚地址将 rt 寄存器的低半字存入存储器中。
+
+
+
 
 
     // rs to reg1
-    assign sel_alu_src1[0] = inst_ori | inst_addiu | inst_subu | inst_jr | inst_addu | inst_or | inst_xor | inst_lw;
+    assign sel_alu_src1[0] = inst_ori | inst_addiu | inst_subu | inst_jr | inst_addu | inst_or | inst_xor | inst_lw | inst_sw | inst_addi 
+                            | inst_add | inst_sub | inst_slt | inst_slti | inst_sltu | inst_sltiu | inst_lb | inst_lbu | inst_lh | inst_lhu
+                            | inst_sb | inst_sh;
 
     // pc to reg1
     assign sel_alu_src1[1] = inst_jal | inst_jalr;
@@ -223,10 +259,11 @@ module ID(
 
     
     // rt to reg2
-    assign sel_alu_src2[0] = inst_subu | inst_addu | inst_sll | inst_or | inst_xor;
+    assign sel_alu_src2[0] = inst_subu | inst_addu | inst_sll | inst_or | inst_xor | inst_add | inst_sub | inst_slt | inst_sltu;
     
     // imm_sign_extend to reg2
-    assign sel_alu_src2[1] = inst_lui | inst_addiu | inst_lw;
+    assign sel_alu_src2[1] = inst_lui | inst_addiu | inst_lw | inst_sw | inst_addi | inst_slti | inst_sltiu | inst_lb | inst_lbu | inst_lh | inst_lhu 
+                            | inst_sb | inst_sh;
 
     // 32'b8 to reg2
     assign sel_alu_src2[2] = inst_jal | inst_jalr;
@@ -236,10 +273,11 @@ module ID(
 
 
 
-    assign op_add = inst_addiu | inst_jal | inst_jalr | inst_addu | inst_lw;
-    assign op_sub = inst_subu;
-    assign op_slt = 1'b0;
-    assign op_sltu = 1'b0;
+    assign op_add = inst_addiu | inst_jal | inst_jalr | inst_addu | inst_lw | inst_sw | inst_addi | inst_add | inst_lb | inst_lbu | inst_lh | inst_lhu 
+                    | inst_sb | inst_sh;
+    assign op_sub = inst_subu | inst_sub;
+    assign op_slt = inst_slt | inst_slti;           //有符号
+    assign op_sltu = inst_sltu | inst_sltiu;        //无符号比较
     assign op_and = 1'b0;
     assign op_nor = 1'b0;
     assign op_or = inst_ori | inst_or;
@@ -256,24 +294,32 @@ module ID(
 
 
     // load and store enable
-    assign data_ram_en = inst_lw;
+    assign data_ram_en = inst_lw | inst_sw | inst_lb | inst_lbu | inst_lh | inst_lhu | inst_sb | inst_sh;
 
     // write enable
-    assign data_ram_wen = 4'b0000;
+    assign data_ram_wen = inst_sw ? 4'b1111 : 4'b0000;
 
     // read enable
     assign data_ram_readen =  inst_lw  ? 4'b1111
+                            :inst_lb   ? 4'b0001
+                            :inst_lbu  ? 4'b0010
+                            :inst_lh   ? 4'b0011
+                            :inst_lhu  ? 4'b0100 
+                            :inst_sb   ? 4'b0101
+                            :inst_sh   ? 4'b0110
                             :4'b0000;
 
     // regfile store enable
-    assign rf_we = inst_ori | inst_lui | inst_addiu | inst_subu | inst_jal | inst_jalr | inst_addu | inst_sll |inst_or | inst_xor | inst_lw;
+    assign rf_we = inst_ori | inst_lui | inst_addiu | inst_subu | inst_jal | inst_jalr | inst_addu | inst_sll |inst_or | inst_xor 
+                  | inst_lw | inst_addi | inst_add | inst_sub | inst_slt | inst_slti | inst_sltu | inst_sltiu | inst_lb | inst_lbu
+                  | inst_lh | inst_lhu;
 
 
 
     // store in [rd]
-    assign sel_rf_dst[0] = inst_subu | inst_jalr | inst_addu | inst_sll | inst_or | inst_xor;
+    assign sel_rf_dst[0] = inst_subu | inst_jalr | inst_addu | inst_sll | inst_or | inst_xor | inst_add | inst_sub | inst_slt | inst_sltu;
     // store in [rt] 
-    assign sel_rf_dst[1] = inst_ori | inst_lui | inst_addiu | inst_lw;
+    assign sel_rf_dst[1] = inst_ori | inst_lui | inst_addiu | inst_lw | inst_addi | inst_slti | inst_sltiu | inst_lb | inst_lbu | inst_lh | inst_lhu;
     // store in [31]
     assign sel_rf_dst[2] = inst_jal;
 
@@ -288,53 +334,53 @@ module ID(
 
     //1219 update
     //ex forwarding,ex返回id段，ex line96
-    wire forwarding_ex_rf_we;             
-    wire [4:0] forwarding_ex_rf_waddr;    
-    wire [31:0] forwarding_ex_result;     
+    wire forwarding_ex_id_we;             
+    wire [4:0] forwarding_ex_id_waddr;    
+    wire [31:0] forwarding_ex_id_wdata;     
 
     //mem forwarding，mem返回id段，mem line80
-    wire forwarding_mem_rf_we;            
-    wire [4:0] forwarding_mem_rf_waddr;   
-    wire [31:0] forwarding_mem_rf_wdata;  
+    wire forwarding_mem_id_we;            
+    wire [4:0] forwarding_mem_id_waddr;   
+    wire [31:0] forwarding_mem_id_wdata;  
 
-    //wb forwarding，mem返回id段，mem line80
-    wire forwarding_wb_rf_we;            
-    wire [4:0] forwarding_wb_rf_waddr;   
-    wire [31:0] forwarding_wb_rf_wdata;  
+    //wb forwarding，wb返回id段，wb line55
+    wire forwarding_wb_id_we;            
+    wire [4:0] forwarding_wb_id_waddr;   
+    wire [31:0] forwarding_wb_id_wdata;  
 
     wire [31:0] new_rdata1, new_rdata2;
 
     assign {
-        forwarding_ex_rf_we,      // 37
-        forwarding_ex_rf_waddr,   // 36:32
-        forwarding_ex_result      // 31:0
+        forwarding_ex_id_we,      // 37
+        forwarding_ex_id_waddr,   // 36:32
+        forwarding_ex_id_wdata     // 31:0
     } = ex_to_id_bus;
 
     assign {
-        forwarding_mem_rf_we,     //37
-        forwarding_mem_rf_waddr,  //36:32
-        forwarding_mem_rf_wdata   //31:0
+        forwarding_mem_id_we,     //37
+        forwarding_mem_id_waddr,  //36:32
+        forwarding_mem_id_wdata   //31:0
     } = mem_to_id_bus;
 
     assign {
-        forwarding_wb_rf_we,     //37
-        forwarding_wb_rf_waddr,  //36:32
-        forwarding_wb_rf_wdata   //31:0
+        forwarding_wb_id_we,     //37
+        forwarding_wb_id_waddr,  //36:32
+        forwarding_wb_id_wdata   //31:0
     } = wb_to_id_bus;
 
 
-    assign new_rdata1 = (forwarding_ex_rf_we & (forwarding_ex_rf_waddr == rs)) ? forwarding_ex_result
-                            :(forwarding_mem_rf_we & (forwarding_mem_rf_waddr == rs)) ? forwarding_mem_rf_wdata
-                            :(wb_rf_we & (wb_rf_waddr == rs)) ? wb_rf_wdata
+    assign new_rdata1 = (forwarding_ex_id_we & (forwarding_ex_id_waddr == rs)) ? forwarding_ex_id_wdata
+                            :(forwarding_mem_id_we & (forwarding_mem_id_waddr == rs)) ? forwarding_mem_id_wdata
+                            :(forwarding_wb_id_we & (forwarding_wb_id_waddr == rs)) ? forwarding_wb_id_wdata
                             :rdata1;
 
-    assign new_rdata2 = (forwarding_ex_rf_we & (forwarding_ex_rf_waddr == rt)) ? forwarding_ex_result
-                            :(forwarding_mem_rf_we & (forwarding_mem_rf_waddr == rt)) ? forwarding_mem_rf_wdata
-                            :(wb_rf_we & (wb_rf_waddr == rt)) ? wb_rf_wdata
+    assign new_rdata2 = (forwarding_ex_id_we & (forwarding_ex_id_waddr == rt)) ? forwarding_ex_id_wdata
+                            :(forwarding_mem_id_we & (forwarding_mem_id_waddr == rt)) ? forwarding_mem_id_wdata
+                            :(forwarding_wb_id_we & (forwarding_wb_id_waddr == rt)) ? forwarding_wb_id_wdata
                             :rdata2;
 
 
-    assign stallreq_from_id = (ex_is_load  & forwarding_ex_rf_waddr == rs) | (ex_is_load & forwarding_ex_rf_waddr == rt) ;
+    assign stallreq_from_id = (ex_is_load  & forwarding_ex_id_waddr == rs) | (ex_is_load & forwarding_ex_id_waddr == rt) ;
 
     assign id_to_ex_bus = {
         data_ram_readen,// 159:162
@@ -362,7 +408,10 @@ module ID(
     wire rs_lt_z;
     wire [31:0] pc_plus_4;
     assign pc_plus_4 = id_pc + 32'h4;
-
+    assign rs_ge_z  = (new_rdata1[31] == 1'b0); //大于等于0
+    assign rs_gt_z  = (new_rdata1[31] == 1'b0 & new_rdata1 != 32'b0  );  //大于0
+    assign rs_le_z  = (new_rdata1[31] == 1'b1 | new_rdata1 == 32'b0  );  //小于等于0
+    assign rs_lt_z  = (new_rdata1[31] == 1'b1);  //小于0
     assign rs_eq_rt = (new_rdata1 == new_rdata2);
 
     assign br_e = (inst_beq & rs_eq_rt) | inst_jal | (inst_bne & !rs_eq_rt) | inst_j | inst_jr | inst_jalr;
