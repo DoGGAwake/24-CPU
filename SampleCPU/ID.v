@@ -23,6 +23,8 @@ module ID(
 
     input wire [`WB_TO_ID_FW-1:0] wb_to_id_bus,     //wb返回id
 
+    input wire [65:0] hilo_ex_to_id,
+
     //debug
     output wire [31:0] debug_rdata1,
     output wire [31:0] debug_rdata2,
@@ -128,7 +130,15 @@ module ID(
         .rdata2 (rdata2 ),
         .we     (wb_rf_we     ),
         .waddr  (wb_rf_waddr  ),
-        .wdata  (wb_rf_wdata  )
+        .wdata  (wb_rf_wdata  ),
+
+        .hi_r      (hi_r   ),
+        .hi_we     (hi_wen   ),
+        .hi_data   (hi_data  ),
+        .lo_r      (lo_r   ),
+        .lo_we     (lo_wen   ),
+        .lo_data   (lo_data  ),
+        .hilo_data (hilo_data )
     );
 
     assign opcode = inst[31:26];
@@ -179,6 +189,10 @@ module ID(
     wire inst_slti;
     wire inst_sltu;
     wire inst_sltiu;
+    wire inst_div;
+    wire inst_divu;
+    wire inst_mult;
+    wire inst_multu;
 
     //移位指令
     wire inst_sll;
@@ -199,6 +213,11 @@ module ID(
     wire inst_sb;
     wire inst_sh;
  
+    //数据移动指令
+    wire inst_mfhi;
+    wire inst_mflo;
+    wire inst_mthi;
+    wire inst_mtlo;
 
 
     wire op_add, op_sub, op_slt, op_sltu;
@@ -272,6 +291,14 @@ module ID(
     assign inst_bltz    = op_d[6'b00_0001] && rt_d[5'b00000];       //如果寄存器 rs 的值小于 0 则转移，否则顺序执行。转移目标由立即数 offset 左移 2 位并进行有符号扩展的值加上该分支指令对应的延迟槽指令的 PC 计算得到。
     assign inst_bgezal  = op_d[6'b00_0001] && rt_d[5'b10001];       //GPR[31] ← PC + 8, 如果寄存器 rs 的值大于等于 0 则转移，否则顺序执行。转移目标由立即数 offset 左移 2 位并进行符号扩展的值加上该分支指令对应的延迟槽指令的 PC 计算得到。
     assign inst_bltzal  = op_d[6'b00_0001] && rt_d[5'b10000];       //GPR[31] ← PC + 8, 如果寄存器 rs 的值小于 0 则转移，否则顺序执行。转移目标由立即数 offset 左移 2 位并进行有符号扩展的值加上该分支指令对应的延迟槽指令的 PC 计算得到。
+    assign inst_mflo    = op_d[6'b00_0000] && func_d[6'b01_0010];   //将 LO 寄存器的值写入到寄存器 rd 中。
+    assign inst_mfhi    = op_d[6'b00_0000] && func_d[6'b01_0000];   //将 HI 寄存器的值写入到寄存器 rd 中。
+    assign inst_mthi    = op_d[6'b00_0000] && func_d[6'b01_0001];   //将寄存器 rs 的值写入到 HI 寄存器中。
+    assign inst_mtlo    = op_d[6'b00_0000] && func_d[6'b01_0011];   //将寄存器 rs 的值写入到 LO 寄存器中。
+    assign inst_mult    = op_d[6'b00_0000] && func_d[6'b01_1000];   //有符号乘法，寄存器 rs 的值乘以寄存器 rt 的值，乘积的低半部分和高半部分分别写入 LO 寄存器和 HI 寄存器。
+    assign inst_multu   = op_d[6'b00_0000] && func_d[6'b01_1001];   //无符号乘法，寄存器 rs 的值乘以寄存器 rt 的值，乘积的低半部分和高半部分分别写入 LO 寄存器和 HI 寄存器。
+    assign inst_div     = op_d[6'b00_0000] && func_d[6'b01_1010];   //有符号除法，寄存器 rs 的值除以寄存器 rt 的值，商写入 LO 寄存器中，余数写入 HI 寄存器中。
+    assign inst_divu    = op_d[6'b00_0000] && func_d[6'b01_1011];   //无符号除法，寄存器 rs 的值除以寄存器 rt 的值，商写入 LO 寄存器中，余数写入 HI 寄存器中。
 
 
 
@@ -280,7 +307,7 @@ module ID(
     assign sel_alu_src1[0] = inst_ori | inst_addiu | inst_subu | inst_jr | inst_addu | inst_or | inst_xor | inst_lw | inst_sw | inst_addi 
                             | inst_add | inst_sub | inst_slt | inst_slti | inst_sltu | inst_sltiu | inst_lb | inst_lbu | inst_lh | inst_lhu
                             | inst_sb | inst_sh | inst_and | inst_andi | inst_nor | inst_xori | inst_sllv | inst_srav | inst_srlv | inst_begz
-                            | inst_bgtz | inst_blez | inst_bltz ;//| inst_bgezal | inst_bltzal;
+                            | inst_bgtz | inst_blez | inst_bltz | inst_mflo | inst_mfhi;
 
     // pc to reg1
     assign sel_alu_src1[1] = inst_jal | inst_jalr | inst_bltzal | inst_bgezal;
@@ -291,7 +318,7 @@ module ID(
     
     // rt to reg2
     assign sel_alu_src2[0] = inst_subu | inst_addu | inst_sll | inst_or | inst_xor | inst_add | inst_sub | inst_slt | inst_sltu | inst_and | inst_nor
-                           | inst_sllv | inst_sra | inst_srav | inst_srlv | inst_srl;
+                           | inst_sllv | inst_sra | inst_srav | inst_srlv | inst_srl | inst_mflo | inst_mfhi | inst_div | inst_divu;
     
     // imm_sign_extend to reg2
     assign sel_alu_src2[1] = inst_lui | inst_addiu | inst_lw | inst_sw | inst_addi | inst_slti | inst_sltiu | inst_lb | inst_lbu | inst_lh | inst_lhu 
@@ -310,7 +337,7 @@ module ID(
     assign op_sub = inst_subu | inst_sub;
     assign op_slt = inst_slt | inst_slti;           //有符号
     assign op_sltu = inst_sltu | inst_sltiu;        //无符号比较
-    assign op_and = inst_and | inst_andi;
+    assign op_and = inst_and | inst_andi | inst_mflo | inst_mfhi;
     assign op_nor = inst_nor;
     assign op_or = inst_ori | inst_or;
     assign op_xor = inst_xor | inst_xori;
@@ -345,13 +372,13 @@ module ID(
     assign rf_we = inst_ori | inst_lui | inst_addiu | inst_subu | inst_jal | inst_jalr | inst_addu | inst_sll |inst_or | inst_xor 
                   | inst_lw | inst_addi | inst_add | inst_sub | inst_slt | inst_slti | inst_sltu | inst_sltiu | inst_lb | inst_lbu
                   | inst_lh | inst_lhu | inst_and | inst_andi | inst_nor | inst_xori | inst_sllv | inst_sra | inst_srav | inst_srlv
-                  | inst_srl | inst_bgezal | inst_bltzal;
+                  | inst_srl | inst_bgezal | inst_bltzal | | inst_mflo | inst_mfhi;
 
 
 
     // store in [rd]
     assign sel_rf_dst[0] = inst_subu | inst_jalr | inst_addu | inst_sll | inst_or | inst_xor | inst_add | inst_sub | inst_slt | inst_sltu 
-                        |  inst_and| inst_nor | inst_sllv | inst_sra | inst_srav | inst_srlv | inst_srl;
+                        |  inst_and| inst_nor | inst_sllv | inst_sra | inst_srav | inst_srlv | inst_srl | inst_mflo | inst_mfhi;
     // store in [rt] 
     assign sel_rf_dst[1] = inst_ori | inst_lui | inst_addiu | inst_lw | inst_addi | inst_slti | inst_sltiu | inst_lb | inst_lbu | inst_lh 
                         |  inst_lhu | inst_andi | inst_xori;
@@ -403,22 +430,56 @@ module ID(
         forwarding_wb_id_wdata   //31:0
     } = wb_to_id_bus;
 
-    //判断是否通过forwarding接收上一个指令的计算结果
-    assign new_rdata1 = (forwarding_ex_id_we & (forwarding_ex_id_waddr == rs)) ? forwarding_ex_id_wdata
-                            :(forwarding_mem_id_we & (forwarding_mem_id_waddr == rs)) ? forwarding_mem_id_wdata
-                            :(forwarding_wb_id_we & (forwarding_wb_id_waddr == rs)) ? forwarding_wb_id_wdata
-                            :rdata1;
+    //1.3 updata hilo
+    wire hi_r;
+    wire hi_wen;
+    wire lo_r;
+    wire lo_wen;
+    wire [31:0] hi_data;
+    wire [31:0] lo_data;
+    wire [31:0] hilo_data;
+    assign {
+        hi_wen,         // 65
+        lo_wen,         // 64
+        hi_data,           // 63:32
+        lo_data           // 31:0
+    } = hilo_ex_to_id;
 
-    assign new_rdata2 = (forwarding_ex_id_we & (forwarding_ex_id_waddr == rt)) ? forwarding_ex_id_wdata
-                            :(forwarding_mem_id_we & (forwarding_mem_id_waddr == rt)) ? forwarding_mem_id_wdata
-                            :(forwarding_wb_id_we & (forwarding_wb_id_waddr == rt)) ? forwarding_wb_id_wdata
-                            :rdata2;
+    assign hi_r = inst_mfhi;
+    assign lo_r = inst_mflo;
+
+
+    wire [31:0] mf_data;
+    assign mf_data = (inst_mfhi & hi_wen) ? hi_data
+                    :(inst_mfhi) ? hilo_data
+                    :(inst_mflo & lo_wen) ? lo_data
+                    :(inst_mflo) ? hilo_data
+                    :(32'b0);
+
+    //判断是否通过forwarding接收上一个指令的计算结果
+    assign new_rdata1 = (inst_mfhi | inst_mflo) ? mf_data
+                        :(forwarding_ex_id_we & (forwarding_ex_id_waddr == rs)) ? forwarding_ex_id_wdata
+                        :(forwarding_mem_id_we & (forwarding_mem_id_waddr == rs)) ? forwarding_mem_id_wdata
+                        :(forwarding_wb_id_we & (forwarding_wb_id_waddr == rs)) ? forwarding_wb_id_wdata
+                        :rdata1;
+
+    assign new_rdata2 = (inst_mfhi | inst_mflo) ? mf_data
+                        :(forwarding_ex_id_we & (forwarding_ex_id_waddr == rt)) ? forwarding_ex_id_wdata
+                        :(forwarding_mem_id_we & (forwarding_mem_id_waddr == rt)) ? forwarding_mem_id_wdata
+                        :(forwarding_wb_id_we & (forwarding_wb_id_waddr == rt)) ? forwarding_wb_id_wdata
+                        :rdata2;
 
     //若上一个流水线操作是lw，而当前流水线操作要对同一个寄存器进行操作，访存冲突。
     assign stallreq_from_id = (ex_is_load  & forwarding_ex_id_waddr == rs) | (ex_is_load & forwarding_ex_id_waddr == rt) ;
 
     assign id_to_ex_bus = {
-        data_ram_readen,// 159:162
+        inst_mthi,      // 168
+        inst_mtlo,      // 167
+        inst_multu,     // 166
+        inst_mult,      // 165
+        inst_divu,      // 164
+        inst_div,       // 163
+        data_ram_readen,// 162:159
         id_pc,          // 158:127
         inst,           // 126:95
         alu_op,         // 94:83

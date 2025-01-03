@@ -46,6 +46,8 @@ module mycpu_core(
     wire [`MEM_TO_ID_FW-1:0] mem_to_id_bus;
     wire [`WB_TO_ID_FW-1:0] wb_to_id_bus;
 
+    //hilo寄存器相关
+    wire [65:0] hilo_ex_to_id;
 
     IF u_IF(
     	.clk             (clk             ),
@@ -74,9 +76,10 @@ module mycpu_core(
         .mem_to_id_bus     (mem_to_id_bus   ),
         .wb_to_id_bus      (wb_to_id_bus    ),
         .ex_is_load        (ex_is_load      ),
+        .hilo_ex_to_id     (hilo_ex_to_id   ),
         .stallreq_from_id  (stallreq_from_id),
-        .debug_rdata1      (debug_rdata1),
-        .debug_rdata2      (debug_rdata2),
+        .debug_rdata1      (debug_rdata1    ),
+        .debug_rdata2      (debug_rdata2    ),
         .debug_new_rdata1  (debug_new_rdata1),
         .debug_new_rdata2  (debug_new_rdata2)
     );
@@ -92,7 +95,8 @@ module mycpu_core(
         .data_sram_addr  (data_sram_addr  ),
         .data_sram_wdata (data_sram_wdata ),
         .ex_to_id_bus    (ex_to_id_bus    ),
-        .ex_is_load      (ex_is_load      ),    
+        .ex_is_load      (ex_is_load      ),  
+        .hilo_ex_to_id   (hilo_ex_to_id   ),  
         .stallreq_from_ex  (stallreq_from_ex)
     );
 

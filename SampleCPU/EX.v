@@ -17,7 +17,9 @@ module EX(
     output wire [`EX_TO_ID_FW-1:0] ex_to_id_bus,  //返回id
 
     output wire stallreq_from_ex,
-    output wire ex_is_load
+    output wire ex_is_load,
+
+    output wire [65:0] hilo_ex_to_id  //hi lo寄存器的forwarding
 );
 
     reg [`ID_TO_EX_WD-1:0] id_to_ex_bus_r;
@@ -51,6 +53,12 @@ module EX(
     reg is_in_delayslot;
 
     assign {
+        inst_mthi,      // 158
+        inst_mtlo,      // 157
+        inst_multu,     // 156
+        inst_mult,      // 155
+        inst_divu,      // 154
+        inst_div,       // 153
         data_ram_readen,// 152:149
         ex_pc,          // 148:117
         inst,           // 116:85
@@ -112,18 +120,18 @@ module EX(
     };
 
     assign data_sram_en = data_ram_en;
-    //判断是否能够写内存
+    //判断是否能够写内存， sb和sh
     assign data_sram_wen =   (data_ram_readen==4'b0101 && ex_result[1:0] == 2'b00 )? 4'b0001 
                             :(data_ram_readen==4'b0101 && ex_result[1:0] == 2'b01 )? 4'b0010
                             :(data_ram_readen==4'b0101 && ex_result[1:0] == 2'b10 )? 4'b0100
                             :(data_ram_readen==4'b0101 && ex_result[1:0] == 2'b11 )? 4'b1000
                             :(data_ram_readen==4'b0111 && ex_result[1:0] == 2'b00 )? 4'b0011
                             :(data_ram_readen==4'b0111 && ex_result[1:0]== 2'b10 )? 4'b1100
-                            : data_ram_wen;      
+                            : data_ram_wen;      //1111为lw
     assign data_sram_addr = ex_result;  //内存的地址
     //写入储存器中的内容
-    assign data_sram_wdata = data_sram_wen==4'b1111 ? rf_rdata2 
-                            :data_sram_wen==4'b0001 ? {24'b0,rf_rdata2[7:0]}
+    assign data_sram_wdata = data_sram_wen==4'b1111 ? rf_rdata2                     //lw，将rt中的数据写入储存器
+                            :data_sram_wen==4'b0001 ? {24'b0,rf_rdata2[7:0]}        
                             :data_sram_wen==4'b0010 ? {16'b0,rf_rdata2[7:0],8'b0}
                             :data_sram_wen==4'b0100 ? {8'b0,rf_rdata2[7:0],16'b0}
                             :data_sram_wen==4'b1000 ? {rf_rdata2[7:0],24'b0}
@@ -134,16 +142,56 @@ module EX(
     //当前是否执行lw操作
     assign ex_is_load = (inst[31:26] == 6'b10_0011) ? 1'b1 : 1'b0;
 
+    //1.3 updata
+    wire hi_wen;
+    wire lo_wen;
+    wire inst_mthi;
+    wire inst_mtlo;
+    wire [31:0] hi_data;
+    wire [31:0] lo_data;
+    assign hi_wen = inst_divu | inst_div | inst_mult | inst_multu | inst_mthi;//hi寄存器 写使能
+    assign lo_wen = inst_divu | inst_div | inst_mult | inst_multu | inst_mtlo;//lo寄存器 写使能
+
+    assign hi_data =  (inst_div|inst_divu)   ? div_result[63:32] //高32位为余数
+                    : (inst_mult|inst_multu) ? mul_result[63:32] 
+                    : (inst_mthi)            ? rf_rdata1
+                    : (32'b0);
+
+    assign lo_data =  (inst_div|inst_divu)   ? div_result[31:0] //低32位为商
+                    : (inst_mult|inst_multu) ? mul_result[31:0] 
+                    : (inst_mtlo)            ? rf_rdata1
+                    : (32'b0);  
+
+
+
+    assign hilo_ex_to_id = {
+        hi_wen,         // 65
+        lo_wen,         // 64
+        hi_data,        // 63:32
+        lo_data         // 31:0
+    };
+
+
     // MUL part
+    wire inst_mult;
+    wire inst_multu;
     wire [63:0] mul_result;
     wire mul_signed; // 有符号乘法标记
+
+    assign mul_signed =   inst_mult  ? 1 
+                        : inst_multu ? 0 
+                        : 0; 
+    
+    wire [31:0] mul_data1,mul_data2;
+    assign mul_data1 = (inst_mult | inst_multu) ? rf_rdata1 : 32'b0;
+    assign mul_data2 = (inst_mult | inst_multu) ? rf_rdata2 : 32'b0;
 
     mul u_mul(
     	.clk        (clk            ),
         .resetn     (~rst           ),
         .mul_signed (mul_signed     ),
-        .ina        (      ), // 乘法源操作数1
-        .inb        (      ), // 乘法源操作数2
+        .ina        (mul_data1      ), // 乘法源操作数1
+        .inb        (mul_data2      ), // 乘法源操作数2
         .result     (mul_result     ) // 乘法结果 64bit
     );
 
