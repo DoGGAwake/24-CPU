@@ -448,10 +448,11 @@ module ID(
     assign rs_le_z  = (new_rdata1[31] == 1'b1 | new_rdata1 == 32'b0  );  //小于等于0, blez
     assign rs_lt_z  = (new_rdata1[31] == 1'b1);  //小于0, bltz, bltzal
     assign rs_eq_rt = (new_rdata1 == new_rdata2);
-
+    //判断是否需要跳转1为跳转，0为顺序执行
     assign br_e = (inst_beq & rs_eq_rt) | inst_jal | (inst_bne & !rs_eq_rt) | inst_j | inst_jr | inst_jalr 
                 | (inst_begz & rs_ge_z) | (inst_blez & rs_le_z) | (inst_bgtz & rs_gt_z) | (inst_bltz & rs_lt_z)
                 | (inst_bltzal & rs_lt_z) | (inst_bgezal & rs_ge_z);
+    //根据跳转指令判断跳转的地址
     assign br_addr = inst_beq ? (pc_plus_4 + {{14{inst[15]}},inst[15:0],2'b0}) 
                     : inst_jal ? ({pc_plus_4[31:28],inst[25:0],2'b0}) 
                     : inst_j ? ({pc_plus_4[31:28],inst[25:0],2'b0}) 
@@ -459,6 +460,7 @@ module ID(
                     : inst_bne ? (pc_plus_4 + {{14{inst[15]}},{inst[15:0],2'b00}})
                     :(inst_begz | inst_bgtz | inst_blez | inst_bltz | inst_bltzal | inst_bgezal) ? (pc_plus_4 + {{14{inst[15]}},{inst[15:0],2'b00}})
                     : 32'b0;
+    //将是否跳转和跳转地址传给IF，在那里计算PC
     assign br_bus = {
         br_e,
         br_addr
