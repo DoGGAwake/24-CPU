@@ -129,6 +129,7 @@ module EX(
                             :data_sram_wen==4'b1100 ? {rf_rdata2[15:0],16'b0}
                             :32'b0;
 
+    //当前是否执行lw操作
     assign ex_is_load = (inst[31:26] == 6'b10_0011) ? 1'b1 : 1'b0;
 
     // MUL part
