@@ -151,6 +151,8 @@ module ID(
     wire inst_lui;
     wire inst_and;
     wire inst_andi;
+    wire inst_nor;
+    wire inst_xori;
 
     //跳转
     wire inst_jal;
@@ -174,6 +176,11 @@ module ID(
 
     //移位指令
     wire inst_sll;
+    wire inst_sllv;
+    wire inst_sra;
+    wire inst_srav;
+    wire inst_srlv;
+    wire inst_srl;
 
     //访存
     wire inst_lw;
@@ -246,24 +253,30 @@ module ID(
     //1.3 updata
     assign inst_and     = op_d[6'b00_0000] && func_d[6'b10_0100];   //寄存器 rs 中的值与寄存器 rt 中的值按位逻辑与，结果写入寄存器 rd 中。
     assign inst_andi    = op_d[6'b00_1100];                         //寄存器 rs 中的值与 0 扩展至 32 位的立即数 imm 按位逻辑与，结果写入寄存器 rt 中。
-
-
+    assign inst_nor     = op_d[6'b00_0000] && func_d[6'b10_0111];   //寄存器 rs 中的值与寄存器 rt 中的值按位逻辑或非，结果写入寄存器 rd 中。
+    assign inst_xori    = op_d[6'b00_1110];                         //寄存器 rs 中的值与 0 扩展至 32 位的立即数 imm 按位逻辑异或，结果写入寄存器 rt 中。
+    assign inst_sllv    = op_d[6'b00_0000] && func_d[6'b00_0100];   //由寄存器 rs 中的值指定移位量，对寄存器 rt 的值进行逻辑左移，结果写入寄存器 rd 中。
+    assign inst_sra     = op_d[6'b00_0000] && func_d[6'b00_0011];   //由立即数 sa 指定移位量，对寄存器 rt 的值进行算术右移，结果写入寄存器 rd 中。
+    assign inst_srav    = op_d[6'b00_0000] && func_d[6'b00_0111];   //由寄存器 rs 中的值指定移位量，对寄存器 rt 的值进行算术右移，结果写入寄存器 rd 中
+    assign inst_srlv    = op_d[6'b00_0000] && func_d[6'b00_0110];   //由寄存器 rs 中的值指定移位量，对寄存器 rt 的值进行逻辑右移，结果写入寄存器 rd 中。
+    assign inst_srl     = op_d[6'b00_0000] && func_d[6'b00_0010];   //由立即数 sa 指定移位量，对寄存器 rt 的值进行逻辑右移，结果写入寄存器 rd 中。
 
 
     // rs to reg1
     assign sel_alu_src1[0] = inst_ori | inst_addiu | inst_subu | inst_jr | inst_addu | inst_or | inst_xor | inst_lw | inst_sw | inst_addi 
                             | inst_add | inst_sub | inst_slt | inst_slti | inst_sltu | inst_sltiu | inst_lb | inst_lbu | inst_lh | inst_lhu
-                            | inst_sb | inst_sh | inst_and | inst_andi;
+                            | inst_sb | inst_sh | inst_and | inst_andi | inst_nor | inst_xori | inst_sllv | inst_srav | inst_srlv;
 
     // pc to reg1
     assign sel_alu_src1[1] = inst_jal | inst_jalr;
 
     // sa_zero_extend to reg1
-    assign sel_alu_src1[2] = inst_sll;
+    assign sel_alu_src1[2] = inst_sll | inst_sra | inst_srl;
 
     
     // rt to reg2
-    assign sel_alu_src2[0] = inst_subu | inst_addu | inst_sll | inst_or | inst_xor | inst_add | inst_sub | inst_slt | inst_sltu | inst_and;
+    assign sel_alu_src2[0] = inst_subu | inst_addu | inst_sll | inst_or | inst_xor | inst_add | inst_sub | inst_slt | inst_sltu | inst_and | inst_nor
+                           | inst_sllv | inst_sra | inst_srav | inst_srlv | inst_srl;
     
     // imm_sign_extend to reg2
     assign sel_alu_src2[1] = inst_lui | inst_addiu | inst_lw | inst_sw | inst_addi | inst_slti | inst_sltiu | inst_lb | inst_lbu | inst_lh | inst_lhu 
@@ -273,7 +286,7 @@ module ID(
     assign sel_alu_src2[2] = inst_jal | inst_jalr;
 
     // imm_zero_extend to reg2
-    assign sel_alu_src2[3] = inst_ori |  | inst_andi;
+    assign sel_alu_src2[3] = inst_ori | inst_andi | inst_xori;
 
 
 
@@ -283,12 +296,12 @@ module ID(
     assign op_slt = inst_slt | inst_slti;           //有符号
     assign op_sltu = inst_sltu | inst_sltiu;        //无符号比较
     assign op_and = inst_and | inst_andi;
-    assign op_nor = 1'b0;
+    assign op_nor = inst_nor;
     assign op_or = inst_ori | inst_or;
-    assign op_xor = inst_xor;
-    assign op_sll = inst_sll;
-    assign op_srl = 1'b0;
-    assign op_sra = 1'b0;
+    assign op_xor = inst_xor | inst_xori;
+    assign op_sll = inst_sll | inst_sllv;
+    assign op_srl = inst_srl | inst_srlv;
+    assign op_sra = inst_sra | inst_srav;
     assign op_lui = inst_lui;
 
     assign alu_op = {op_add, op_sub, op_slt, op_sltu,
@@ -316,14 +329,17 @@ module ID(
     // regfile store enable
     assign rf_we = inst_ori | inst_lui | inst_addiu | inst_subu | inst_jal | inst_jalr | inst_addu | inst_sll |inst_or | inst_xor 
                   | inst_lw | inst_addi | inst_add | inst_sub | inst_slt | inst_slti | inst_sltu | inst_sltiu | inst_lb | inst_lbu
-                  | inst_lh | inst_lhu | inst_and | inst_andi;
+                  | inst_lh | inst_lhu | inst_and | inst_andi | inst_nor | inst_xori | inst_sllv | inst_sra | inst_srav | inst_srlv
+                  | inst_srl;
 
 
 
     // store in [rd]
-    assign sel_rf_dst[0] = inst_subu | inst_jalr | inst_addu | inst_sll | inst_or | inst_xor | inst_add | inst_sub | inst_slt | inst_sltu | inst_and;
+    assign sel_rf_dst[0] = inst_subu | inst_jalr | inst_addu | inst_sll | inst_or | inst_xor | inst_add | inst_sub | inst_slt | inst_sltu 
+                        |  inst_and| inst_nor | inst_sllv | inst_sra | inst_srav | inst_srlv | inst_srl;
     // store in [rt] 
-    assign sel_rf_dst[1] = inst_ori | inst_lui | inst_addiu | inst_lw | inst_addi | inst_slti | inst_sltiu | inst_lb | inst_lbu | inst_lh | inst_lhu | inst_andi;
+    assign sel_rf_dst[1] = inst_ori | inst_lui | inst_addiu | inst_lw | inst_addi | inst_slti | inst_sltiu | inst_lb | inst_lbu | inst_lh 
+                        |  inst_lhu | inst_andi | inst_xori;
     // store in [31]
     assign sel_rf_dst[2] = inst_jal;
 
