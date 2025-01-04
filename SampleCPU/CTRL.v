@@ -20,7 +20,7 @@ module CTRL(
 
     always @ (*) begin
         if (rst) begin
-            stall = `StallBus'b0;
+            stall <= `StallBus'b0;
         end
         //id段若请求暂停，则暂停ex,mem,wb
         else if(stallreq_from_ex == 1'b1) begin
@@ -31,7 +31,7 @@ module CTRL(
             stall <= 6'b000111;  
         end
         else begin
-            stall = `StallBus'b0;  
+            stall <= `StallBus'b0;  
         end
     end
 //在五级流水线每级结构中都应该有暂停相关部分
